@@ -2,17 +2,11 @@ import telebot
 import sqlite3
 import json
 import os
-import threading
-import time
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# ===== НАСТРОЙКИ (БЕЗОПАСНОЕ ХРАНЕНИЕ ТОКЕНОВ) =====
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8384839588:AAGTR4bXgWe1LchAl18P6683frZOic0aMao')
-ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID', '431584671')
-
-if not BOT_TOKEN or BOT_TOKEN == '8384839588:AAGTR4bXgWe1LchAl18P6683frZOic0aMao':
-    raise ValueError("CRITICAL: BOT_TOKEN не установлен в переменных окружения!")
+# ===== НАСТРОЙКИ =====
+BOT_TOKEN = '8384839588:AAGTR4bXgWe1LchAl18P6683frZOic0aMao'  # ← СЮДА ВСТАВЬТЕ СВОЙ ТОКЕН
+ADMIN_CHAT_ID = '431584671'  # ← СЮДА ВСТАВЬТЕ ВАШ ID (узнать через @userinfobot)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -117,7 +111,7 @@ def start(message):
 def show_bento(message):
     bot.send_photo(
         message.chat.id,
-        'https://i.imgur.com/5XJmZQl.jpg',  # Исправлено: убраны лишние пробелы
+        'https://i.imgur.com/5XJmZQl.jpg',  # ← можно заменить на своё фото
         caption='🧁 Бенто-тортики\n\n'
                 '• Вес: 100-120 г каждый\n'
                 '• Начинки: ванильная, шоколадная, творожный крем, фруктовый конфитюр\n'
@@ -129,7 +123,7 @@ def show_bento(message):
 def show_cakes(message):
     bot.send_photo(
         message.chat.id,
-        'https://i.imgur.com/8GkR0fP.jpg',  # Исправлено: убраны лишние пробелы
+        'https://i.imgur.com/8GkR0fP.jpg',
         caption='🎂 Торты ручной работы\n\n'
                 '• От 1 до 5 кг\n'
                 '• Любая тематика: мультфильмы, хобби, фото\n'
@@ -141,7 +135,7 @@ def show_cakes(message):
 def show_pancakes(message):
     bot.send_photo(
         message.chat.id,
-        'https://i.imgur.com/3WYV0dT.jpg',  # Исправлено: убраны лишние пробелы
+        'https://i.imgur.com/3WYV0dT.jpg',
         caption='🥞 Панкейки с начинкой\n\n'
                 '• Мягкие, воздушные, диаметр 10 см\n'
                 '• Начинки: сгущёнка, нутелла, ягоды, творог\n'
@@ -154,6 +148,7 @@ def contact(message):
     bot.send_message(
         message.chat.id,
         '💬 Напишите мне напрямую:\n@AnnaYakushina\n\n'
+        'Или позвоните: +7 (XXX) XXX-XX-XX\n\n'
         'Работаю ежедневно с 9:00 до 20:00',
         reply_markup=main_menu()
     )
@@ -201,10 +196,7 @@ def callback_handler(call):
         if call.data in items:
             add_to_cart(user_id, items[call.data])
             bot.answer_callback_query(call.id, '✅ Добавлено в корзину!', show_alert=True)
-            try:
-                bot.delete_message(user_id, call.message.message_id)
-            except:
-                pass  # Игнорируем ошибку если сообщение уже удалено
+            bot.delete_message(user_id, call.message.message_id)
             bot.send_message(user_id, 'Товар добавлен в корзину!', reply_markup=main_menu())
     
     # Удаление из корзины
@@ -215,25 +207,17 @@ def callback_handler(call):
             removed = cart.pop(idx)
             bot.answer_callback_query(call.id, f'❌ Удалено: {removed["name"]}')
             show_cart(call.message)
-        else:
-            bot.answer_callback_query(call.id, 'Ошибка: товар не найден в корзине')
     
     # Очистка корзины
     elif call.data == 'clear_cart':
         clear_cart(user_id)
         bot.answer_callback_query(call.id, 'Корзина очищена')
-        try:
-            bot.delete_message(user_id, call.message.message_id)
-        except:
-            pass
+        bot.delete_message(user_id, call.message.message_id)
         bot.send_message(user_id, '🛒 Корзина очищена', reply_markup=main_menu())
     
     # Назад в меню
     elif call.data == 'back_to_menu':
-        try:
-            bot.delete_message(user_id, call.message.message_id)
-        except:
-            pass
+        bot.delete_message(user_id, call.message.message_id)
         bot.send_message(user_id, 'Выберите категорию:', reply_markup=main_menu())
     
     # Оформление заказа
@@ -244,10 +228,7 @@ def callback_handler(call):
             return
         
         # Сохраняем корзину для следующего шага
-        try:
-            bot.delete_message(user_id, call.message.message_id)
-        except:
-            pass
+        bot.delete_message(user_id, call.message.message_id)
         bot.send_message(
             user_id,
             '✏️ ОФОРМЛЕНИЕ ЗАКАЗА\n\n'
@@ -257,79 +238,54 @@ def callback_handler(call):
 
 # ===== ШАГИ ОФОРМЛЕНИЯ ЗАКАЗА =====
 def get_name(message):
-    if not message.text or message.text.startswith('/'):
-        bot.send_message(message.chat.id, 'Имя не может быть пустым. Пожалуйста, введите ваше имя:')
-        bot.register_next_step_handler(message, get_name)
-        return
-    
-    user_data = {'name': message.text.strip(), 'cart': get_cart(message.chat.id)}
-    bot.send_message(message.chat.id, '📱 Укажите телефон для связи (например, +7 999 123-45-67):')
+    user_id = message.chat.id
+    user_data = {'name': message.text, 'cart': get_cart(user_id)}
+    bot.send_message(user_id, '📱 Укажите телефон для связи:')
     bot.register_next_step_handler(message, get_phone, user_data)
 
 def get_phone(message, user_data):
-    if not message.text or message.text.startswith('/'):
-        bot.send_message(message.chat.id, 'Телефон не может быть пустым. Пожалуйста, введите корректный номер:')
-        bot.register_next_step_handler(message, get_phone, user_data)
-        return
-    
-    user_data['phone'] = message.text.strip()
-    bot.send_message(message.chat.id, '📍 Укажите адрес доставки или напишите "самовывоз":')
+    user_data['phone'] = message.text
+    bot.send_message(user_id=message.chat.id, text='📍 Адрес доставки или самовывоз?')
     bot.register_next_step_handler(message, get_address, user_data)
 
 def get_address(message, user_data):
-    if not message.text or message.text.startswith('/'):
-        bot.send_message(message.chat.id, 'Адрес не может быть пустым. Пожалуйста, введите адрес:')
-        bot.register_next_step_handler(message, get_address, user_data)
-        return
-    
-    user_data['address'] = message.text.strip()
+    user_data['address'] = message.text
     bot.send_message(
         message.chat.id,
-        '📅 На какую дату нужен заказ? (например: 15 февраля)\n❗️Заказы принимаются минимум за 3 дня'
+        '📅 На какую дату нужен заказ? (например: 15 февраля)'
     )
     bot.register_next_step_handler(message, save_order, user_data)
 
 def save_order(message, user_data):
-    if not message.text or message.text.startswith('/'):
-        bot.send_message(message.chat.id, 'Дата не может быть пустой. Пожалуйста, укажите дату:')
-        bot.register_next_step_handler(message, save_order, user_data)
-        return
-    
     user_id = message.chat.id
-    user_data['delivery_date'] = message.text.strip()
+    user_data['delivery_date'] = message.text
     
     # Считаем итог
     total = sum(item['price'] for item in user_data['cart'])
     items_text = '\n'.join(f'• {item["name"]} — {item["price"]}₽' for item in user_data['cart'])
     
     # Сохраняем в БД
-    try:
-        conn = sqlite3.connect('orders.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO orders (user_id, username, items, total, name, phone, address, delivery_date, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            user_id,
-            message.from_user.username or f'user_{user_id}',
-            json.dumps(user_data['cart']),
-            total,
-            user_data['name'],
-            user_data['phone'],
-            user_data['address'],
-            user_data['delivery_date'],
-            datetime.now().strftime('%Y-%m-%d %H:%M')
-        ))
-        order_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        bot.send_message(user_id, '❌ Произошла ошибка при сохранении заказа. Пожалуйста, попробуйте позже.')
-        bot.send_message(ADMIN_CHAT_ID, f'🚨 ОШИБКА СОХРАНЕНИЯ ЗАКАЗА: {str(e)}')
-        clear_cart(user_id)
-        return
+    conn = sqlite3.connect('orders.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO orders (user_id, username, items, total, name, phone, address, delivery_date, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        user_id,
+        message.from_user.username or '',
+        json.dumps(user_data['cart']),
+        total,
+        user_data['name'],
+        user_data['phone'],
+        user_data['address'],
+        user_data['delivery_date'],
+        datetime.now().strftime('%Y-%m-%d %H:%M')
+    ))
+    order_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
     
-    # Отправляем админу уведомление
+    # Отправляем вам уведомление
     admin_text = (
         f'🔔 НОВЫЙ ЗАКАЗ #{order_id}\n\n'
         f'Имя: {user_data["name"]}\n'
@@ -339,11 +295,7 @@ def save_order(message, user_data):
         f'Товары:\n{items_text}\n\n'
         f'ИТОГО: {total}₽'
     )
-    try:
-        bot.send_message(ADMIN_CHAT_ID, admin_text)
-    except Exception as e:
-        bot.send_message(user_id, '⚠️ Заказ сохранён, но уведомление кондитеру не отправлено. С вами свяжутся вручную.')
-        bot.send_message(ADMIN_CHAT_ID, f'🚨 ОШИБКА ОТПРАВКИ УВЕДОМЛЕНИЯ: {str(e)}\n\n{admin_text}')
+    bot.send_message(ADMIN_CHAT_ID, admin_text)
     
     # Отправляем клиенту подтверждение
     client_text = (
@@ -361,50 +313,7 @@ def save_order(message, user_data):
     # Очищаем корзину
     clear_cart(user_id)
 
-# ===== HEALTH CHECK СЕРВЕР ДЛЯ RENDER.COM =====
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'ok', 'bot': 'running'}).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    # Отключаем логирование health checks
-    def log_message(self, format, *args):
-        pass
-
-def run_health_server(port):
-    server_address = ('0.0.0.0', port)
-    httpd = HTTPServer(server_address, HealthCheckHandler)
-    print(f"✅ Health check server запущен на порту {port}")
-    httpd.serve_forever()
-
 # ===== ЗАПУСК =====
 if __name__ == '__main__':
-    # 1. Проверка критически важных настроек
-    if not BOT_TOKEN or BOT_TOKEN.startswith('8384839588:'):
-        print("❌ CRITICAL ERROR: BOT_TOKEN не настроен! Установите переменную окружения BOT_TOKEN")
-        exit(1)
-    
-    if not ADMIN_CHAT_ID or not ADMIN_CHAT_ID.isdigit():
-        print("❌ CRITICAL ERROR: ADMIN_CHAT_ID не настроен! Установите переменную окружения ADMIN_CHAT_ID")
-        exit(1)
-    
-    # 2. Запуск health check сервера для Render.com
-    PORT = int(os.environ.get('PORT', 8000))
-    health_thread = threading.Thread(
-        target=run_health_server,
-        args=(PORT,),
-        daemon=True
-    )
-    health_thread.start()
-    time.sleep(0.5)  # Даем время серверу запуститься
-    
-    # 3. Запуск бота
-    print(f"🚀 Бот запускается... (порт health check: {PORT})")
-    print(f"ℹ️  ADMIN_CHAT_ID: {ADMIN_CHAT_ID}")
+    print('Бот запущен...')
     bot.infinity_polling()
