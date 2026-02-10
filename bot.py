@@ -314,6 +314,18 @@ def save_order(message, user_data):
     clear_cart(user_id)
 
 # ===== ЗАПУСК =====
-if __name__ == '__main__':
-    print('Бот запущен...')
-    bot.infinity_polling()
+# Вебхук-эндпоинт (обязательно для работы с Web Service)
+@app.route('/' + BOT_TOKEN, methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+…    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    print(f'✅ Вебхук установлен: {webhook_url}')
+    
+    # Запускаем Flask на порту из переменной окружения
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
+
