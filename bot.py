@@ -336,7 +336,6 @@ def set_webhook():
     webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_URL', 'your-app.onrender.com')}/{BOT_TOKEN}"
     bot.remove_webhook()
     bot.set_webhook(url=webhook_url)
-    return f'✅ Вебхук установлен: {webhook_url}'bot.remove_webhook()
     
 if __name__ == '__main__':
     # Устанавливаем вебхук при старте
@@ -348,3 +347,4 @@ if __name__ == '__main__':
     # Запускаем Flask на порту из переменной окружения
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
+
