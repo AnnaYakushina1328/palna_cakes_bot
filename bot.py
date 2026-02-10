@@ -342,3 +342,4 @@ if __name__ == '__main__':
     print(f'Токен: {BOT_TOKEN[:10]}...')
     print(f'Admin ID: {ADMIN_CHAT_ID}')
     bot.infinity_polling()
+
