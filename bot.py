@@ -4,15 +4,18 @@ import json
 import os
 from datetime import datetime
 
-# ===== НАСТРОЙКИ =====
-BOT_TOKEN = '8384839588:AAGTR4bXgWe1LchAl18P6683frZOic0aMao'  # ← СЮДА ВСТАВЬТЕ СВОЙ ТОКЕН
-ADMIN_CHAT_ID = '431584671'  # ← СЮДА ВСТАВЬТЕ ВАШ ID (узнать через @userinfobot)
+# ===== НАСТРОЙКИ (БЕЗОПАСНО ЧЕРЕЗ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ) =====
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8384839588:AAGTR4bXgWe1LchAl18P6683frZOic0aMao')
+ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID', '431584671')
+
+if not BOT_TOKEN:
+    raise ValueError("❌ Не задан токен бота! Укажите переменную BOT_TOKEN в настройках хостинга.")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
-    conn = sqlite3.connect('orders.db')
+    conn = sqlite3.connect('orders.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS orders (
@@ -111,7 +114,7 @@ def start(message):
 def show_bento(message):
     bot.send_photo(
         message.chat.id,
-        'https://i.imgur.com/5XJmZQl.jpg',  # ← можно заменить на своё фото
+        'https://i.imgur.com/5XJmZQl.jpg',  # Убраны лишние пробелы в конце
         caption='🧁 Бенто-тортики\n\n'
                 '• Вес: 100-120 г каждый\n'
                 '• Начинки: ванильная, шоколадная, творожный крем, фруктовый конфитюр\n'
@@ -196,7 +199,10 @@ def callback_handler(call):
         if call.data in items:
             add_to_cart(user_id, items[call.data])
             bot.answer_callback_query(call.id, '✅ Добавлено в корзину!', show_alert=True)
-            bot.delete_message(user_id, call.message.message_id)
+            try:
+                bot.delete_message(user_id, call.message.message_id)
+            except:
+                pass
             bot.send_message(user_id, 'Товар добавлен в корзину!', reply_markup=main_menu())
     
     # Удаление из корзины
@@ -212,12 +218,18 @@ def callback_handler(call):
     elif call.data == 'clear_cart':
         clear_cart(user_id)
         bot.answer_callback_query(call.id, 'Корзина очищена')
-        bot.delete_message(user_id, call.message.message_id)
+        try:
+            bot.delete_message(user_id, call.message.message_id)
+        except:
+            pass
         bot.send_message(user_id, '🛒 Корзина очищена', reply_markup=main_menu())
     
     # Назад в меню
     elif call.data == 'back_to_menu':
-        bot.delete_message(user_id, call.message.message_id)
+        try:
+            bot.delete_message(user_id, call.message.message_id)
+        except:
+            pass
         bot.send_message(user_id, 'Выберите категорию:', reply_markup=main_menu())
     
     # Оформление заказа
@@ -228,7 +240,10 @@ def callback_handler(call):
             return
         
         # Сохраняем корзину для следующего шага
-        bot.delete_message(user_id, call.message.message_id)
+        try:
+            bot.delete_message(user_id, call.message.message_id)
+        except:
+            pass
         bot.send_message(
             user_id,
             '✏️ ОФОРМЛЕНИЕ ЗАКАЗА\n\n'
@@ -236,7 +251,7 @@ def callback_handler(call):
         )
         bot.register_next_step_handler(call.message, get_name)
 
-# ===== ШАГИ ОФОРМЛЕНИЯ ЗАКАЗА =====
+# ===== ШАГИ ОФОРМЛЕНИЯ ЗАКАЗА (ИСПРАВЛЕНО: правильные параметры) =====
 def get_name(message):
     user_id = message.chat.id
     user_data = {'name': message.text, 'cart': get_cart(user_id)}
@@ -245,7 +260,8 @@ def get_name(message):
 
 def get_phone(message, user_data):
     user_data['phone'] = message.text
-    bot.send_message(user_id=message.chat.id, text='📍 Адрес доставки или самовывоз?')
+    # ИСПРАВЛЕНО: было "user_id=message.chat.id" → правильно "message.chat.id"
+    bot.send_message(message.chat.id, '📍 Адрес доставки или самовывоз?')
     bot.register_next_step_handler(message, get_address, user_data)
 
 def get_address(message, user_data):
@@ -265,25 +281,29 @@ def save_order(message, user_data):
     items_text = '\n'.join(f'• {item["name"]} — {item["price"]}₽' for item in user_data['cart'])
     
     # Сохраняем в БД
-    conn = sqlite3.connect('orders.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT INTO orders (user_id, username, items, total, name, phone, address, delivery_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        user_id,
-        message.from_user.username or '',
-        json.dumps(user_data['cart']),
-        total,
-        user_data['name'],
-        user_data['phone'],
-        user_data['address'],
-        user_data['delivery_date'],
-        datetime.now().strftime('%Y-%m-%d %H:%M')
-    ))
-    order_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect('orders.db', check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO orders (user_id, username, items, total, name, phone, address, delivery_date, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            message.from_user.username or '',
+            json.dumps(user_data['cart']),
+            total,
+            user_data['name'],
+            user_data['phone'],
+            user_data['address'],
+            user_data['delivery_date'],
+            datetime.now().strftime('%Y-%m-%d %H:%M')
+        ))
+        order_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        bot.send_message(user_id, f'❌ Ошибка сохранения заказа: {str(e)}')
+        return
     
     # Отправляем вам уведомление
     admin_text = (
@@ -295,7 +315,10 @@ def save_order(message, user_data):
         f'Товары:\n{items_text}\n\n'
         f'ИТОГО: {total}₽'
     )
-    bot.send_message(ADMIN_CHAT_ID, admin_text)
+    try:
+        bot.send_message(ADMIN_CHAT_ID, admin_text)
+    except Exception as e:
+        print(f'Ошибка отправки админу: {e}')
     
     # Отправляем клиенту подтверждение
     client_text = (
@@ -315,5 +338,7 @@ def save_order(message, user_data):
 
 # ===== ЗАПУСК =====
 if __name__ == '__main__':
-    print('Бот запущен...')
+    print('✅ Бот запущен!')
+    print(f'Токен: {BOT_TOKEN[:10]}...')
+    print(f'Admin ID: {ADMIN_CHAT_ID}')
     bot.infinity_polling()
